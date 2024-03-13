@@ -25,38 +25,38 @@
 #include "../log/log.h"
 
 class util_timer;
-
+// 客户端信息 
 struct client_data
 {
-    sockaddr_in address;
-    int sockfd;
-    util_timer *timer;
+    sockaddr_in address;                                // 客户端的地址信息 
+    int sockfd;                                         // 客户端的套接字描述符
+    util_timer *timer;                                  // 指向关联的定时器对象
 };
-
+// 定时器 
 class util_timer
 {
 public:
     util_timer() : prev(NULL), next(NULL) {}
 
 public:
-    time_t expire;
+    time_t expire;                                      // 定时器的过期时间？
     
-    void (* cb_func)(client_data *);
-    client_data *user_data;
-    util_timer *prev;
-    util_timer *next;
+    void (* cb_func)(client_data *);                    // 定时器过期时回调函数？
+    client_data *user_data;                             // 指向包含客户端信息的client_data结构体
+    util_timer *prev;                                   // 定时器排序链表中的前一个
+    util_timer *next;                                   // 定时器排序链表中的下一个
 };
-
+// 排序定时器链表 
 class sort_timer_lst
 {
 public:
     sort_timer_lst();
     ~sort_timer_lst();
 
-    void add_timer(util_timer *timer);
-    void adjust_timer(util_timer *timer);
-    void del_timer(util_timer *timer);
-    void tick();
+    void add_timer(util_timer *timer);                  // 添加一个定时器 
+    void adjust_timer(util_timer *timer);               // 调整链表中某个定时器的时间 
+    void del_timer(util_timer *timer);                  // 删除一个定时器 
+    void tick();                                        // 定时器的滴答函数，用于检查和处理到期的定时器
 
 private:
     void add_timer(util_timer *timer, util_timer *lst_head);
@@ -65,6 +65,7 @@ private:
     util_timer *tail;
 };
 
+// 提供了一系列实用工具函数，用于管理非阻塞套接字、注册 epoll 事件、处理信号和定时器任务
 class Utils
 {
 public:
@@ -91,12 +92,13 @@ public:
     void show_error(int connfd, const char *info);
 
 public:
-    static int *u_pipefd;
-    sort_timer_lst m_timer_lst;
-    static int u_epollfd;
-    int m_TIMESLOT;
+    static int *u_pipefd;                           // 管道文件描述符？
+    sort_timer_lst m_timer_lst;                     // 定时器排序链表
+    static int u_epollfd;                           // epoll文件描述符？
+    int m_TIMESLOT;                                 // 定时器时间间隔
 };
 
+// 回调函数？为啥定义在类外，类内用函数指针调用？
 void cb_func(client_data *user_data);
 
 #endif

@@ -30,9 +30,9 @@ private:
 	connection_pool();
 	~connection_pool();
 
-	int m_MaxConn;  //最大连接数
-	int m_CurConn;  //当前已使用的连接数
-	int m_FreeConn; //当前空闲的连接数
+	int m_MaxConn;  //最大连接数 
+	int m_CurConn;  //当前已使用的连接数 
+	int m_FreeConn; //当前空闲的连接数 
 	locker lock;
 	list<MYSQL *> connList; //连接池
 	sem reserve;

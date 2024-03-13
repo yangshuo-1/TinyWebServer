@@ -42,24 +42,31 @@ bool Log::init(const char *file_name, int close_log, int log_buf_size, int split
     struct tm *sys_tm = localtime(&t);
     struct tm my_tm = *sys_tm;
 
- 
+    // strrchr：查找一个字符串在另一个字符串末次出现的位置，返回从这个位置起到末尾的字符
+    // 这个是为了获取路径后日志的文件名 
     const char *p = strrchr(file_name, '/');
+    // 储存完整的文件名 
     char log_full_name[256] = {0};
-
+    
+    // 如果指定日志的话就在那个路径下创建，没有指定的话就自定义创建  
     if (p == NULL)
     {
+        // 格式化字符串并将结果写到log_full_name中
         snprintf(log_full_name, 255, "%d_%02d_%02d_%s", my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, file_name);
     }
     else
     {
+        // 获取文件名 
         strcpy(log_name, p + 1);
+        // 获取文件路径 
         strncpy(dir_name, file_name, p - file_name + 1);
         snprintf(log_full_name, 255, "%s%d_%02d_%02d_%s", dir_name, my_tm.tm_year + 1900, my_tm.tm_mon + 1, my_tm.tm_mday, log_name);
     }
 
     m_today = my_tm.tm_mday;
-    
+    // 追加模式 
     m_fp = fopen(log_full_name, "a");
+    // 检查文件是否创建成功
     if (m_fp == NULL)
     {
         return false;
@@ -70,11 +77,14 @@ bool Log::init(const char *file_name, int close_log, int log_buf_size, int split
 
 void Log::write_log(int level, const char *format, ...)
 {
+    // 获取当前时间 
     struct timeval now = {0, 0};
     gettimeofday(&now, NULL);
     time_t t = now.tv_sec;
     struct tm *sys_tm = localtime(&t);
     struct tm my_tm = *sys_tm;
+
+    // 根据level设置级别  
     char s[16] = {0};
     switch (level)
     {
@@ -94,10 +104,11 @@ void Log::write_log(int level, const char *format, ...)
         strcpy(s, "[info]:");
         break;
     }
-    //写入一个log，对m_count++, m_split_lines最大行数
+    // 写入一个log，对m_count++, m_split_lines最大行数
     m_mutex.lock();
     m_count++;
 
+    // 检查是否要创建新的日志 
     if (m_today != my_tm.tm_mday || m_count % m_split_lines == 0) //everyday log
     {
         
@@ -123,6 +134,8 @@ void Log::write_log(int level, const char *format, ...)
  
     m_mutex.unlock();
 
+
+    // 可变参数列表 
     va_list valst;
     va_start(valst, format);
 
@@ -141,6 +154,8 @@ void Log::write_log(int level, const char *format, ...)
 
     m_mutex.unlock();
 
+
+    // 是否异步写入日志 
     if (m_is_async && !m_log_queue->full())
     {
         m_log_queue->push(log_str);

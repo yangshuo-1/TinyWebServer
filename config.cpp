@@ -8,6 +8,7 @@ Config::Config(){
     LOGWrite = 0;
 
     //触发组合模式,默认listenfd LT + connfd LT
+    // y:这里修改为1的话是什么模式？博客上说此时性能最高 
     TRIGMode = 0;
 
     //listenfd触发模式，默认LT

@@ -159,8 +159,10 @@ void http_conn::init()
     memset(m_real_file, '\0', FILENAME_LEN);
 }
 
-//从状态机，用于分析出一行内容
-//返回值为行的读取状态，有LINE_OK,LINE_BAD,LINE_OPEN
+/*从状态机，用于分析出一行内容，支持主状态机判断是何种报文，一个主状态机有多个从状态机 
+返回值为行的读取状态，有LINE_OK,LINE_BAD,LINE_OPEN
+在HTTP报文中可以通过查找\ r\ n将报文拆解成单独的进行解析，从状态机处理read_buffer中的数据
+将每行数据的末尾的\ r\ n设置为\0\0，并更新从状态机在buffer中读取的位置m_checked_idx */
 http_conn::LINE_STATUS http_conn::parse_line()
 {
     char temp;
@@ -169,18 +171,23 @@ http_conn::LINE_STATUS http_conn::parse_line()
         temp = m_read_buf[m_checked_idx];
         if (temp == '\r')
         {
+            // 下一个字符达到了buffer结尾，则接收不完整，需要继续接收 
             if ((m_checked_idx + 1) == m_read_idx)
                 return LINE_OPEN;
+            // 如果当前字符是'\r'，下一个是'\n'，将这俩改为'\0'，
             else if (m_read_buf[m_checked_idx + 1] == '\n')
             {
                 m_read_buf[m_checked_idx++] = '\0';
                 m_read_buf[m_checked_idx++] = '\0';
                 return LINE_OK;
             }
+            // 语法错误 
             return LINE_BAD;
         }
+        // 可能是上次读取到'\r'就到了buffer末尾，没有接收完整，再次接收时会出现这种情况 
         else if (temp == '\n')
         {
+            // 如果上一个字符时\r且前边又字符，就一起改了
             if (m_checked_idx > 1 && m_read_buf[m_checked_idx - 1] == '\r')
             {
                 m_read_buf[m_checked_idx - 1] = '\0';
@@ -190,6 +197,7 @@ http_conn::LINE_STATUS http_conn::parse_line()
             return LINE_BAD;
         }
     }
+    // 表示接受不完整 
     return LINE_OPEN;
 }
 
@@ -241,11 +249,17 @@ bool http_conn::read_once()
 //解析http请求行，获得请求方法，目标url及http版本号
 http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
 {
+    // 例如：GET    /index.html   HTTP/1.1
+
+    // char *strpbrk(const char *str1, const char *str2) 依次检验字符串 str1 中的字符，
+    // 当被检验字符在字符串 str2 中也包含时，则停止检验，并返回该字符位置。
+    // 返回值：str1 中第一个匹配字符串 str2 中字符的字符数，如果未找到字符则返回 NULL。
     m_url = strpbrk(text, " \t");
     if (!m_url)
     {
         return BAD_REQUEST;
     }
+    // 将前边的数据取出，确定请求方式 
     *m_url++ = '\0';
     char *method = text;
     if (strcasecmp(method, "GET") == 0)
@@ -257,22 +271,30 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
     }
     else
         return BAD_REQUEST;
+
+    // m_url继续往后找，跳过\t
     m_url += strspn(m_url, " \t");
+
     m_version = strpbrk(m_url, " \t");
     if (!m_version)
         return BAD_REQUEST;
+    // 取出版本号  
     *m_version++ = '\0';
     m_version += strspn(m_version, " \t");
+    // 以上边那个HTTP请求为例，此时：version-HTTP/1.1；url-/index.html
     if (strcasecmp(m_version, "HTTP/1.1") != 0)
         return BAD_REQUEST;
     if (strncasecmp(m_url, "http://", 7) == 0)
     {
+        // 跳过http:// 
         m_url += 7;
+        // 指向下一个/，即寻找路径
         m_url = strchr(m_url, '/');
     }
 
     if (strncasecmp(m_url, "https://", 8) == 0)
     {
+        // 跳过https://
         m_url += 8;
         m_url = strchr(m_url, '/');
     }
@@ -281,7 +303,9 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
         return BAD_REQUEST;
     //当url为/时，显示判断界面
     if (strlen(m_url) == 1)
+        // 把judge.html接在/后边
         strcat(m_url, "judge.html");
+    // 主状态机状态转移 
     m_check_state = CHECK_STATE_HEADER;
     return NO_REQUEST;
 }
@@ -289,71 +313,93 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
 //解析http请求的一个头部信息
 http_conn::HTTP_CODE http_conn::parse_headers(char *text)
 {
+    // 如果首字符是\0，说明text为空
     if (text[0] == '\0')
     {
+        // 如果之前设置了内容长度，说明已经没有待处理的请求头内容了
+        // qqqq返回值这块啥情况？
         if (m_content_length != 0)
         {
+            // 将主状态机的状态设置为处理请求体 
             m_check_state = CHECK_STATE_CONTENT;
-            return NO_REQUEST;
+            return NO_REQUEST;  // 已经写完了
         }
         return GET_REQUEST;
     }
+    // 解析请求头连接字段
     else if (strncasecmp(text, "Connection:", 11) == 0)
     {
         text += 11;
         text += strspn(text, " \t");
+        // 检查Connection:后边是不是keep-alive，如果是的话，设置长连接
         if (strcasecmp(text, "keep-alive") == 0)
         {
             m_linger = true;
         }
     }
+    // 解析请求头内容长度字段 
     else if (strncasecmp(text, "Content-length:", 15) == 0)
     {
         text += 15;
         text += strspn(text, " \t");
         m_content_length = atol(text);
     }
+    // 解析请求头host字段 
     else if (strncasecmp(text, "Host:", 5) == 0)
     {
         text += 5;
         text += strspn(text, " \t");
         m_host = text;
     }
+    // 未知的写入日志 
     else
     {
         LOG_INFO("oop!unknow header: %s", text);
     }
+    // 继续写
     return NO_REQUEST;
 }
 
 //判断http请求是否被完整读入
 http_conn::HTTP_CODE http_conn::parse_content(char *text)
 {
+    // 判断是否读取了请求消息体
     if (m_read_idx >= (m_content_length + m_checked_idx))
     {
+
         text[m_content_length] = '\0';
         //POST请求中最后为输入的用户名和密码
         m_string = text;
         return GET_REQUEST;
     }
-    return NO_REQUEST;
+    return NO_REQUEST;          
 }
 
+/*
+主状态机函数，负责对改行数据解析 
+通过调用从状态机驱动主状态机，在主状态机进行解析前，从状态机已经处理好了，主状态机可以直接处理
+
+*/
 http_conn::HTTP_CODE http_conn::process_read()
 {
+    // 从状态机初始化 
     LINE_STATUS line_status = LINE_OK;
+    // 主状态机初始化
     HTTP_CODE ret = NO_REQUEST;
     char *text = 0;
 
     while ((m_check_state == CHECK_STATE_CONTENT && line_status == LINE_OK) || ((line_status = parse_line()) == LINE_OK))
     {
         text = get_line();
+        // 当前处理行的起始位置在buffer中的位置索引 
         m_start_line = m_checked_idx;
         LOG_INFO("%s", text);
+        // 三种状态转换逻辑，这个变量的初始是什么？什么含义？ 
         switch (m_check_state)
         {
         case CHECK_STATE_REQUESTLINE:
         {
+            // 解析请求行 
             ret = parse_request_line(text);
             if (ret == BAD_REQUEST)
                 return BAD_REQUEST;
@@ -361,38 +407,48 @@ http_conn::HTTP_CODE http_conn::process_read()
         }
         case CHECK_STATE_HEADER:
         {
+            // 解析请求头 
             ret = parse_headers(text);
             if (ret == BAD_REQUEST)
                 return BAD_REQUEST;
+            // 获得了完整的http请求，跳转到报文响应函数  
             else if (ret == GET_REQUEST)
             {
+                // qqq：怎么响应的？
                 return do_request();
             }
             break;
         }
         case CHECK_STATE_CONTENT:
         {
+            // 解析消息体 
             ret = parse_content(text);
+            // 获得了完整的http请求，跳转到报文响应函数  
             if (ret == GET_REQUEST)
                 return do_request();
+            // line_status改变，跳出循环，代表解析完了消息体 
             line_status = LINE_OPEN;
             break;
         }
+        // 默认状态
         default:
             return INTERNAL_ERROR;
         }
     }
     return NO_REQUEST;
 }
-
+// 对于请求的处理函数
 http_conn::HTTP_CODE http_conn::do_request()
 {
+    // 把doc_root赋值给m_real_file
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
     //printf("m_url:%s\n", m_url);
+    // 查找'/'字符
     const char *p = strrchr(m_url, '/');
 
-    //处理cgi
+    // 处理cgi
+    // 实现登陆和注册校验
     if (cgi == 1 && (*(p + 1) == '2' || *(p + 1) == '3'))
     {
 
@@ -432,11 +488,12 @@ http_conn::HTTP_CODE http_conn::do_request()
 
             if (users.find(name) == users.end())
             {
+                // 如果没有就插入 qqqqq这样是串行化吧？？？
                 m_lock.lock();
                 int res = mysql_query(mysql, sql_insert);
                 users.insert(pair<string, string>(name, password));
                 m_lock.unlock();
-
+                // 不同的结果返回到不同的处理界面中 
                 if (!res)
                     strcpy(m_url, "/log.html");
                 else
@@ -455,7 +512,7 @@ http_conn::HTTP_CODE http_conn::do_request()
                 strcpy(m_url, "/logError.html");
         }
     }
-
+    // 不同的请求返回不同的界面 
     if (*(p + 1) == '0')
     {
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
@@ -499,16 +556,18 @@ http_conn::HTTP_CODE http_conn::do_request()
     else
         strncpy(m_real_file + len, m_url, FILENAME_LEN - len - 1);
 
+    // 处理对文件的请求 
     if (stat(m_real_file, &m_file_stat) < 0)
         return NO_RESOURCE;
 
     if (!(m_file_stat.st_mode & S_IROTH))
         return FORBIDDEN_REQUEST;
-
+    // 检查是否是一个目录 
     if (S_ISDIR(m_file_stat.st_mode))
         return BAD_REQUEST;
 
     int fd = open(m_real_file, O_RDONLY);
+    // 将文件映射到内存中，通过m_file_address指针访问 
     m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
     return FILE_REQUEST;

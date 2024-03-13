@@ -37,6 +37,7 @@ void sort_timer_lst::add_timer(util_timer *timer)
     }
     add_timer(timer, head);
 }
+// 调整新定时器在链表上的位置 
 void sort_timer_lst::adjust_timer(util_timer *timer)
 {
     if (!timer)
@@ -62,6 +63,7 @@ void sort_timer_lst::adjust_timer(util_timer *timer)
         add_timer(timer, timer->next);
     }
 }
+// 在链表中删除定时器 
 void sort_timer_lst::del_timer(util_timer *timer)
 {
     if (!timer)

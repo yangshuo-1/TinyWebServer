@@ -30,24 +30,33 @@ private:
     std::list<T *> m_workqueue; //请求队列
     locker m_queuelocker;       //保护请求队列的互斥锁
     sem m_queuestat;            //是否有任务需要处理
-    connection_pool *m_connPool;  //数据库
+    connection_pool *m_connPool;  //数据库连接池
     int m_actor_model;          //模型切换
 };
 template <typename T>
 threadpool<T>::threadpool( int actor_model, connection_pool *connPool, int thread_number, int max_requests) : m_actor_model(actor_model),m_thread_number(thread_number), m_max_requests(max_requests), m_threads(NULL),m_connPool(connPool)
 {
+    // 如果构造时传入的参数：线程池中线程数，最大请求数不合法，抛出异常。 
     if (thread_number <= 0 || max_requests <= 0)
         throw std::exception();
     m_threads = new pthread_t[m_thread_number];
+    // new相关知识点，new不仅分配内存，还会初始化对象，malloc只分配内存；new可以自动计算要分配空间的
+    // 大小，malloc要手动指定；new分配失败的话会抛出异常，malloc只会返回nullptr；new返回创建对象的类型
+    // 的指针，malloc返回void *需要转换
+    // 如果构造线程池数组失败，抛出异常 用new的话返回的是指向
     if (!m_threads)
         throw std::exception();
+    // 初始化，创建线程
     for (int i = 0; i < thread_number; ++i)
     {
         if (pthread_create(m_threads + i, NULL, worker, this) != 0)
         {
+            // 如果创建失败就删了抛出异常 
             delete[] m_threads;
             throw std::exception();
         }
+        // 将线程设置为detach，如果失败就销毁
+        // 每个线程执行完之后直接销毁？不需要回收吗？
         if (pthread_detach(m_threads[i]))
         {
             delete[] m_threads;
@@ -63,16 +72,19 @@ threadpool<T>::~threadpool()
 template <typename T>
 bool threadpool<T>::append(T *request, int state)
 {
+    // 加锁
     m_queuelocker.lock();
+    // 如果当前的请求队列数量等于最大请求数量，解锁并返回false
     if (m_workqueue.size() >= m_max_requests)
     {
         m_queuelocker.unlock();
         return false;
     }
+    // 
     request->m_state = state;
     m_workqueue.push_back(request);
     m_queuelocker.unlock();
-    m_queuestat.post();
+    m_queuestat.post(); /// ？post是干啥
     return true;
 }
 template <typename T>

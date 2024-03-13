@@ -32,11 +32,13 @@ public:
     void thread_pool();
     void sql_pool();
     void log_write();
+    // 选择触发模式，LT和ET的排列组合
     void trig_mode();
     void eventListen();
     void eventLoop();
     void timer(int connfd, struct sockaddr_in client_address);
     void adjust_timer(util_timer *timer);
+
     void deal_timer(util_timer *timer, int sockfd);
     bool dealclientdata();
     bool dealwithsignal(bool& timeout, bool& stop_server);
@@ -45,21 +47,22 @@ public:
 
 public:
     //基础
-    int m_port;
-    char *m_root;
-    int m_log_write;
-    int m_close_log;
-    int m_actormodel;
 
-    int m_pipefd[2];
+    int m_port;                                     //
+    char *m_root;                                   //  
+    int m_log_write;                                //
+    int m_close_log;                                //
+    int m_actormodel;                               //
+
+    int m_pipefd[2];                                // 用于进程间通信，存储两个新的文件描述符；m_pipefd[0]是读端，m_pipefd[1]是写端
     int m_epollfd;
-    http_conn *users;
+    http_conn *users;                               // 
 
     //数据库相关
-    connection_pool *m_connPool;
-    string m_user;         //登陆数据库用户名
-    string m_passWord;     //登陆数据库密码
-    string m_databaseName; //使用数据库名
+    connection_pool *m_connPool;                    // 数据库连接池
+    string m_user;                                  // 登陆数据库用户名
+    string m_passWord;                              // 登陆数据库密码
+    string m_databaseName;                          // 使用数据库名
     int m_sql_num;
 
     //线程池相关
@@ -72,7 +75,7 @@ public:
     int m_listenfd;
     int m_OPT_LINGER;
     int m_TRIGMode;
-    int m_LISTENTrigmode;
+    int m_LISTENTrigmode;                           // 触发模式；0：LT；1：ET
     int m_CONNTrigmode;
 
     //定时器相关

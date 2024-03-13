@@ -34,6 +34,7 @@ public:
 private:
     Log();
     virtual ~Log();
+    // 异步写入日志
     void *async_write_log()
     {
         string single_log;
@@ -56,7 +57,7 @@ private:
     FILE *m_fp;         //打开log的文件指针
     char *m_buf;
     block_queue<string> *m_log_queue; //阻塞队列
-    bool m_is_async;                  //是否同步标志位
+    bool m_is_async;                  //是否异步标志位
     locker m_mutex;
     int m_close_log; //关闭日志
 };
