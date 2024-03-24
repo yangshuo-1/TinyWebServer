@@ -24,14 +24,14 @@ private:
     void run();
 
 private:
-    int m_thread_number;        //线程池中的线程数
-    int m_max_requests;         //请求队列中允许的最大请求数
-    pthread_t *m_threads;       //描述线程池的数组，其大小为m_thread_number
-    std::list<T *> m_workqueue; //请求队列
-    locker m_queuelocker;       //保护请求队列的互斥锁
-    sem m_queuestat;            //是否有任务需要处理
-    connection_pool *m_connPool;  //数据库连接池
-    int m_actor_model;          //模型切换
+    int m_thread_number;            // 线程池中的线程数
+    int m_max_requests;             // 请求队列中允许的最大请求数
+    pthread_t *m_threads;           // 描述线程池的数组，其大小为m_thread_number
+    std::list<T *> m_workqueue;     // 请求队列
+    locker m_queuelocker;           // 保护请求队列的互斥锁
+    sem m_queuestat;                // 是否有任务需要处理
+    connection_pool *m_connPool;    // 数据库连接池
+    int m_actor_model;              // 模型选择，默认是0-proactor，1为reactor
 };
 template <typename T>
 threadpool<T>::threadpool( int actor_model, connection_pool *connPool, int thread_number, int max_requests) : m_actor_model(actor_model),m_thread_number(thread_number), m_max_requests(max_requests), m_threads(NULL),m_connPool(connPool)
@@ -56,7 +56,8 @@ threadpool<T>::threadpool( int actor_model, connection_pool *connPool, int threa
             throw std::exception();
         }
         // 将线程设置为detach，如果失败就销毁
-        // 每个线程执行完之后直接销毁？不需要回收吗？
+        // qqqq每个线程执行完之后直接销毁？不需要回收吗？
+        // aaaa看run函数，是一个while true，所以线程创建之后会一直执行  
         if (pthread_detach(m_threads[i]))
         {
             delete[] m_threads;
@@ -84,7 +85,7 @@ bool threadpool<T>::append(T *request, int state)
     request->m_state = state;
     m_workqueue.push_back(request);
     m_queuelocker.unlock();
-    m_queuestat.post(); /// ？post是干啥
+    m_queuestat.post(); /// 
     return true;
 }
 template <typename T>
@@ -101,6 +102,7 @@ bool threadpool<T>::append_p(T *request)
     m_queuestat.post();
     return true;
 }
+// 线程运行函数 
 template <typename T>
 void *threadpool<T>::worker(void *arg)
 {
@@ -113,7 +115,9 @@ void threadpool<T>::run()
 {
     while (true)
     {
+        // 确保有足够多的连接 
         m_queuestat.wait();
+
         m_queuelocker.lock();
         if (m_workqueue.empty())
         {
@@ -123,12 +127,16 @@ void threadpool<T>::run()
         T *request = m_workqueue.front();
         m_workqueue.pop_front();
         m_queuelocker.unlock();
+
         if (!request)
             continue;
+        // reactor
         if (1 == m_actor_model)
         {
+            // 如果是读 
             if (0 == request->m_state)
             {
+                // http读
                 if (request->read_once())
                 {
                     request->improv = 1;
@@ -141,12 +149,14 @@ void threadpool<T>::run()
                     request->timer_flag = 1;
                 }
             }
+            // 写 
             else
             {
                 if (request->write())
                 {
                     request->improv = 1;
                 }
+                // 如果写出现错误，两个都置为1 
                 else
                 {
                     request->improv = 1;
@@ -154,6 +164,7 @@ void threadpool<T>::run()
                 }
             }
         }
+        // proactor
         else
         {
             connectionRAII mysqlcon(&request->mysql, m_connPool);

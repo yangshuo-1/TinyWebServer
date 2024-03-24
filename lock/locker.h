@@ -26,10 +26,12 @@ public:
     {
         sem_destroy(&m_sem);
     }
+    // 减少信号量的值 
     bool wait()
     {
         return sem_wait(&m_sem) == 0;
     }
+    // 增加信号量的值 
     bool post()
     {
         return sem_post(&m_sem) == 0;
@@ -68,6 +70,7 @@ public:
 private:
     pthread_mutex_t m_mutex;
 };
+// 条件变量 
 class cond
 {
 public:

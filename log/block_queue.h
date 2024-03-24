@@ -12,11 +12,12 @@
 #include <sys/time.h>
 #include "../lock/locker.h"
 using namespace std;
-
+// 阻塞队列封装了生产者-消费者模型，其中push成员是生产者，pop消费者 
 template <class T>
 class block_queue
 {
 public:
+    // 初始化 
     block_queue(int max_size = 1000)
     {
         if (max_size <= 0)
@@ -29,6 +30,9 @@ public:
         m_size = 0;
         m_front = -1;
         m_back = -1;
+
+        // 私有变量里不需要初始化互斥锁和条件变量吗？
+
     }
 
     void clear()
@@ -121,13 +125,14 @@ public:
         m_mutex.unlock();
         return tmp;
     }
-    //往队列添加元素，需要将所有使用队列的线程先唤醒
-    //当有元素push进队列,相当于生产者生产了一个元素
-    //若当前没有线程等待条件变量,则唤醒无意义
+    // 往队列添加元素，需要将所有使用队列的线程先唤醒
+    // 当有元素push进队列, 相当于生产者生产了一个元素
+    // 若当前没有线程等待条件变量, 则唤醒无意义
     bool push(const T &item)
     {
 
         m_mutex.lock();
+        // 如果以及达到最大值，添加失败 
         if (m_size >= m_max_size)
         {
 
@@ -135,7 +140,7 @@ public:
             m_mutex.unlock();
             return false;
         }
-
+        // 将新增数据放在循环数组的对应位置 
         m_back = (m_back + 1) % m_max_size;
         m_array[m_back] = item;
 
@@ -145,21 +150,25 @@ public:
         m_mutex.unlock();
         return true;
     }
-    //pop时,如果当前队列没有元素,将会等待条件变量
+    // pop时, 如果当前队列没有元素, 将会等待条件变量
     bool pop(T &item)
     {
 
         m_mutex.lock();
+        // 多个消费者时，用while
         while (m_size <= 0)
         {
-            
+            // qqqqq这条是干啥的？
+            // 调用m_cond.wait会将m_mutex释放，释放互斥锁后，线程会进入阻塞状态等待被唤醒
+            // 该线程被条件变量重新唤醒后，会尝试获取之前释放的线程锁
+            // 如果没有重新获取锁会返回false，进入if中
             if (!m_cond.wait(m_mutex.get()))
             {
                 m_mutex.unlock();
-                return false;
+                return false;   // 等待条件变量失败，直接返回 
             }
         }
-
+        // 取出队首元素，使用循环数组模拟的队列 
         m_front = (m_front + 1) % m_max_size;
         item = m_array[m_front];
         m_size--;
@@ -167,7 +176,7 @@ public:
         return true;
     }
 
-    //增加了超时处理
+    // 增加了超时处理，要在指定时间内再次拿到互斥锁
     bool pop(T &item, int ms_timeout)
     {
         struct timespec t = {0, 0};

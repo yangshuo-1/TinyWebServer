@@ -97,8 +97,8 @@ public:
         return &m_address;
     }
     void initmysql_result(connection_pool *connPool);
-    int timer_flag;
-    int improv;
+    int timer_flag;                                 // 
+    int improv;                                     // 
 
 
 private:
@@ -122,14 +122,14 @@ private:
     bool add_blank_line();
 
 public:
-    static int m_epollfd;
+    static int m_epollfd;                           // epoll实例的文件描述符 
     static int m_user_count;                        // 
     MYSQL *mysql;                                   // 
     int m_state;                                    // 读为0, 写为1
 
 private:
-    int m_sockfd;
-    sockaddr_in m_address;
+    int m_sockfd;                                   // 
+    sockaddr_in m_address;                          // 
     char m_read_buf[READ_BUFFER_SIZE];              // 读缓存区
     long m_read_idx;                                // 读缓存区已读取数据的索引
     long m_checked_idx;                             // 当前从状态机在buffer中读取的位置
@@ -155,7 +155,7 @@ private:
     char *doc_root;                                 // 文件的根目录？从初始化那里获取的
 
     map<string, string> m_users;
-    int m_TRIGMode;
+    int m_TRIGMode;                                 // 触发模式 
     int m_close_log;
 
     char sql_user[100];

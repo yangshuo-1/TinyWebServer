@@ -159,6 +159,14 @@ void WebServer::eventListen()
     // 将套接字添加到epoll时间表 
     utils.addfd(m_epollfd, m_listenfd, false, m_LISTENTrigmode);
     http_conn::m_epollfd = m_epollfd;       // qqqq这是啥？传递给了httpcon类的静态成员变量，为什么要传递？
+                                            // ---把epoll实例文件描述符赋值给http_conn类中的静态变量， 后续直接在epoll实例里对实例进行操作，比如添加监听的文件描述符 
+
+
+    /*
+        具体的做法是，信号处理函数使用管道将信号传递给主循环，信号处理函数往管道的写端写入信号值，
+        主循环则从管道的读端读出信号值，使用I/O复用系统调用来监听管道读端的可读事件，
+        这样信号事件与其他文件描述符都可以通过epoll来监测，从而实现统一处理。
+    */
 
     // 创建一对Unix域套接字。这对套接字通常用于进程间通信（IPC）。
     // m_pipefd是一个数组，存储了两个新的文件描述符。
@@ -174,16 +182,17 @@ void WebServer::eventListen()
     // 若管道满了会立即返回非零值
     utils.setnonblocking(m_pipefd[1]);
 
-    //设置管道读端挂上树 统一事件源？？？
+    //设置管道读端挂上树，监听读事件
     utils.addfd(m_epollfd, m_pipefd[0], false, 0);
-    //设置接收SIGPIPE信号执行系统处理，这样不会莫名退出
+    //将SIGPIPE信号处理为SIG_IGN，忽略SIGPIPE信号 
     utils.addsig(SIGPIPE, SIG_IGN);
 
-    //传递给主循环的信号值，这里只关注SIGALRM（alarm函数）和SIGTERM（程序异常终止）？？？？
+    // 传递给主循环的信号值，这里只关注SIGALRM（alarm函数）和SIGTERM（程序异常终止）
+    // 设置这两种信号的处理函数为sig_handler 
     utils.addsig(SIGALRM, utils.sig_handler, false);
     utils.addsig(SIGTERM, utils.sig_handler, false);
 
-    //每隔TIMESLOT时间触发SIGALRM信号
+    // 每隔TIMESLOT时间触发SIGALRM信号
     alarm(TIMESLOT);
 
     //工具类,信号和描述符基础操作
@@ -208,7 +217,7 @@ void WebServer::timer(int connfd, struct sockaddr_in client_address)
     utils.m_timer_lst.add_timer(timer);
 }
 
-//若有数据传输，则将定时器往后延迟3个单位
+//若有数据传输，则将定时器往后延迟3个TIMESLOT
 //并对新的定时器在链表上的位置进行调整
 void WebServer::adjust_timer(util_timer *timer)
 {
@@ -353,6 +362,7 @@ void WebServer::dealwithread(int sockfd)
             // 查看是否有改进标志 
             if (1 == users[sockfd].improv)
             {
+                // 此时两个同时为1，说明读or写出错了
                 // 计时器事件发生，处理计时器事件 
                 if (1 == users[sockfd].timer_flag)
                 {
@@ -366,7 +376,7 @@ void WebServer::dealwithread(int sockfd)
     }
     else
     {
-        //proactor 先行器
+        // proactor 先行器
         if (users[sockfd].read_once())
         {
             LOG_INFO("deal with the client(%s)", inet_ntoa(users[sockfd].get_address()->sin_addr));
@@ -408,6 +418,7 @@ void WebServer::dealwithwrite(int sockfd)
             {
                 if (1 == users[sockfd].timer_flag)
                 {
+                    // 处理坏连接 
                     deal_timer(timer, sockfd);
                     users[sockfd].timer_flag = 0;
                 }
@@ -435,6 +446,10 @@ void WebServer::dealwithwrite(int sockfd)
     }
 }
 
+/*
+    只要程序不关，就一直不退出
+
+*/
 void WebServer::eventLoop()
 {
     bool timeout = false;
@@ -442,7 +457,7 @@ void WebServer::eventLoop()
 
     while (!stop_server)
     {
-        // 监测发生时间的文件描述符 
+        // 监测发生时间的文件描述符 ，如果没有事件发生会一直等着 
         // 如果成功，返回发生的事件数量，即填充到events数组的epoll_event结构体的数量 
         // 如果错误，返回-1 
         int number = epoll_wait(m_epollfd, events, MAX_EVENT_NUMBER, -1);
@@ -464,23 +479,28 @@ void WebServer::eventLoop()
                 if (false == flag)
                     continue;
             }
+            /*
+            EPOLLRDHUP：对端断开连接，或者发生了一个使流式套接字（如TCP）半关闭的事件
+            EPOLLHUP：当挂断（hang up）事件发生时，这个标志会被设置。在TCP连接中，这通常意味着对端执行了一个正常的关闭序列，发送了一个FIN包
+            EPOLLERR：当底层的I/O通道出现错误时，包括网络错误、硬件故障或其他底层传输问题
+            */
             else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR))
             {
                 // 服务器端关闭连接，移除对应的定时器
                 util_timer *timer = users_timer[sockfd].timer;
                 deal_timer(timer, sockfd);
             }
-            // 处理信号？？？？
-            //管道读端对应文件描述符发生读事件
-            //因为统一了事件源，信号处理当成读事件来处理
-            //怎么统一？就是信号回调函数哪里不立即处理而是写到：pipe的写端
+            // 处理信号
+            // 管道读端对应文件描述符发生读事件
+            // 因为统一了事件源，信号处理当成读事件来处理，因为读端也放入epoll实例了，可以用epoll监控是否发生
+            // 怎么统一？就是信号回调函数哪里不立即处理而是写到：pipe的写端
             else if ((sockfd == m_pipefd[0]) && (events[i].events & EPOLLIN))
             {
                 bool flag = dealwithsignal(timeout, stop_server);
                 if (false == flag)
                     LOG_ERROR("%s", "dealclientdata failure");
             }
-            //处理客户连接上接收到的数据
+            //处理客户连接上接收到的数据 
             else if (events[i].events & EPOLLIN)
             {
                 dealwithread(sockfd);

@@ -7,8 +7,9 @@ Config::Config(){
     //日志写入方式，默认同步
     LOGWrite = 0;
 
-    //触发组合模式,默认listenfd LT + connfd LT
+    // 触发组合模式,默认listenfd LT + connfd LT
     // y:这里修改为1的话是什么模式？博客上说此时性能最高 
+    // 1的话listen是lt，connect是et 
     TRIGMode = 0;
 
     //listenfd触发模式，默认LT
@@ -29,7 +30,7 @@ Config::Config(){
     //关闭日志,默认不关闭
     close_log = 0;
 
-    //并发模型,默认是proactor
+    //并发模型,默认是proactor-0
     actor_model = 0;
 }
 

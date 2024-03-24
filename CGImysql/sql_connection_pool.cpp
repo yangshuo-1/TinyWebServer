@@ -66,7 +66,7 @@ MYSQL *connection_pool::GetConnection()
 
 	if (0 == connList.size())
 		return NULL;
-
+	// 确保有足够多的连接  
 	reserve.wait();
 	
 	lock.lock();

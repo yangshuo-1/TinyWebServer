@@ -1,3 +1,15 @@
+/*
+由于非活跃连接占用了连接资源，严重影响服务器的性能，通过实现一个服务器定时器，处理这种非活跃连接，释放连接资源。
+利用alarm函数周期性地触发SIGALRM信号,该信号的信号处理函数利用管道通知主循环执行定时器链表上的定时任务.
+
+统一事件源
+基于升序链表的定时器
+处理非活动连接
+
+
+*/
+
+
 #ifndef LST_TIMER
 #define LST_TIMER
 
@@ -39,9 +51,9 @@ public:
     util_timer() : prev(NULL), next(NULL) {}
 
 public:
-    time_t expire;                                      // 定时器的过期时间？
+    time_t expire;                                      // 定时器的超时时间 
     
-    void (* cb_func)(client_data *);                    // 定时器过期时回调函数？
+    void (* cb_func)(client_data *);                    // 定时器超时时调用的回调函数指针 
     client_data *user_data;                             // 指向包含客户端信息的client_data结构体
     util_timer *prev;                                   // 定时器排序链表中的前一个
     util_timer *next;                                   // 定时器排序链表中的下一个
@@ -59,7 +71,7 @@ public:
     void tick();                                        // 定时器的滴答函数，用于检查和处理到期的定时器
 
 private:
-    void add_timer(util_timer *timer, util_timer *lst_head);
+    void add_timer(util_timer *timer, util_timer *lst_head);    // 将定时器插入到合适的位置 
 
     util_timer *head;
     util_timer *tail;
