@@ -104,10 +104,10 @@ public:
     void show_error(int connfd, const char *info);
 
 public:
-    static int *u_pipefd;                           // 管道文件描述符？
+    static int *u_pipefd;                           // 管道文件描述符，与WebServer一致
     sort_timer_lst m_timer_lst;                     // 定时器排序链表
-    static int u_epollfd;                           // epoll文件描述符？
-    int m_TIMESLOT;                                 // 定时器时间间隔
+    static int u_epollfd;                           // epoll文件描述符。与WebServer一致
+    int m_TIMESLOT;                                 // 最小超时单位 
 };
 
 // 回调函数？为啥定义在类外，类内用函数指针调用？

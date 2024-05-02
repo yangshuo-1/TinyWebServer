@@ -142,8 +142,8 @@ void WebServer::eventListen()
     // 将套接字绑定到套接字地址和端口上 
     ret = bind(m_listenfd, (struct sockaddr *)&address, sizeof(address));
     assert(ret >= 0);
-    // 调用listen函数使套接字开始监听连接，第二个参数制定了套接字的监听队列长度 
-    ret = listen(m_listenfd, 5);
+    // 调用listen函数使套接字开始监听连接，第二个参数制定了套接字的监听队列长度 // 以前是5 
+    ret = listen(m_listenfd, 128);
     assert(ret >= 0);
 
     utils.init(TIMESLOT);
@@ -176,7 +176,7 @@ void WebServer::eventListen()
     
     // 将写端设置为非阻塞，qqqqq为什么呢？
 
-    // 管道文件为阻塞读和阻塞写的时候，如果先读，陷入阻塞，等待写操作；如果先写，陷入阻塞，等待读操作
+    // 管道文件为阻塞读和阻塞写的时候，如果先读，陷入阻塞，等待写操作；如将g果先写，陷入阻塞，等待读操作
     // send是将信息发送给套接字缓冲区，如果缓冲区满了，则会阻塞，
     // 这时候会进一步增加信号处理函数的执行时间，为此，将其修改为非阻塞。
     // 若管道满了会立即返回非零值
