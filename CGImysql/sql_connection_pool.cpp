@@ -16,6 +16,7 @@ connection_pool::connection_pool()
 	m_FreeConn = 0;
 }
 
+// todo: 懒汉式的实现方法是有问题的，改为两次检测的实现方法。
 connection_pool *connection_pool::GetInstance()
 {
 	static connection_pool connPool;
@@ -23,6 +24,7 @@ connection_pool *connection_pool::GetInstance()
 }
 
 //构造初始化
+// todo：构造时就确定了大小，连接池可以考虑修改为动态大小的。
 void connection_pool::init(string url, string User, string PassWord, string DBName, int Port, int MaxConn, int close_log)
 {
 	m_url = url;
