@@ -8,6 +8,7 @@
 #include <string.h>
 #include <iostream>
 #include <string>
+
 #include "../lock/locker.h"
 #include "../log/log.h"
 
@@ -28,7 +29,11 @@ public:
 
 private:
 	connection_pool();
+	connection_pool(connection_pool& r_pool) = delete;
 	~connection_pool();
+	connection_pool operator = (connection_pool& r_pool) = delete;
+
+private:
 
 	int m_MaxConn;  					// 最大连接数 
 	int m_CurConn;  					// 当前已使用的连接数 
