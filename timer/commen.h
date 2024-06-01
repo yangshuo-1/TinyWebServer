@@ -14,7 +14,7 @@ struct ClientData{
 };
 
 // 回调函数
-using handler = std::function<void(ClientData*)>;
+using Handler_ptr = std::function<void(ClientData*)>;
 
 // 定时器
 class Timer{
@@ -24,7 +24,7 @@ public:
 private:
     time_t expire;              // 超时时间
     ClientData *user_data;      // 客户端数据
-    handler cd_func;               // 回调函数
+    Handler_ptr cd_func;               // 回调函数
 };
 
 #endif

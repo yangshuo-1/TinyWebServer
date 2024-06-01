@@ -9,7 +9,7 @@
 
 class SkiplistNode{
 public:
-    SkiplistNode(int key, int level, handler recall): key_(key), level_(level){
+    SkiplistNode(int key, int level, Handler_ptr recall): key_(key), level_(level){
         cd_func = recall;
     };
 
@@ -24,7 +24,7 @@ private:
     int key_;
     int level_;
 
-    handler cd_func;
+    Handler_ptr cd_func;
 
     std::vector<SkiplistNode*> next_;
 };
